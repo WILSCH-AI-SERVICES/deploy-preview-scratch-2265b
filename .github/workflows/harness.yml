@@ -1,0 +1,50 @@
+name: Harness
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'bootstrap | teardown | cleanup-direct'
+        required: true
+        default: bootstrap
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H 91.99.74.207 >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Bootstrap (Pass 0 — stand repo-root checkout)
+        if: inputs.mode == 'bootstrap'
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@91.99.74.207 '
+            set -euo pipefail
+            P=/home/deploy/projects/deploy-preview-scratch-2265b
+            if [[ ! -d $P ]]; then
+              git clone --branch staging https://github.com/WILSCH-AI-SERVICES/deploy-preview-scratch-2265b.git $P
+            fi
+            git config --global --add safe.directory $P
+            echo "WEB_PORT=18265" > $P/.env
+            echo "--- repo-root checkout stood ---"
+            git -C $P rev-parse --abbrev-ref HEAD
+            git -C $P rev-parse --short HEAD
+          '
+      - name: Cleanup preview directly (AC5 fallback)
+        if: inputs.mode == 'cleanup-direct'
+        run: |
+          curl -sL https://raw.githubusercontent.com/WILSCH-AI-SERVICES/deploy-action/main/scripts/cleanup-preview.sh -o /tmp/cleanup-preview.sh
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@91.99.74.207 'bash -s -- /home/deploy/projects/deploy-preview-scratch-2265b issue-99265 wilsch-deployment.com' < /tmp/cleanup-preview.sh
+      - name: Teardown harness (leave no residue)
+        if: inputs.mode == 'teardown'
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@91.99.74.207 '
+            set -euo pipefail
+            P=/home/deploy/projects/deploy-preview-scratch-2265b
+            cd $P 2>/dev/null && docker compose down -v --remove-orphans || true
+            cd /
+            rm -rf $P ${P}-issue-99265
+            echo "--- harness torn down ---"
+            ls -d ${P}* 2>/dev/null || echo "no scratch paths remain"
+          '

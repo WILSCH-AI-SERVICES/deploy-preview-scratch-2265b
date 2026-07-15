@@ -1,0 +1,14 @@
+name: Deploy
+on:
+  push:
+    branches: ['issue-*', 'staging']
+  pull_request:
+    types: [closed]
+    branches: [staging]
+jobs:
+  deploy:
+    uses: WILSCH-AI-SERVICES/deploy-action/.github/workflows/deploy.yml@main
+    with:
+      domain-suffix: wilsch-deployment.com
+      ssh-host: 91.99.74.207
+    secrets: inherit
