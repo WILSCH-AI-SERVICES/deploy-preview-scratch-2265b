@@ -48,3 +48,30 @@ jobs:
             echo "--- harness torn down ---"
             ls -d ${P}* 2>/dev/null || echo "no scratch paths remain"
           '
+      - name: Witness (read-only on-box inspection)
+        if: inputs.mode == 'witness'
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no deploy@91.99.74.207 '
+            set -uo pipefail
+            P=/home/deploy/projects/deploy-preview-scratch-2265b
+            PB=${P}-issue-99265
+            echo "== repo-root =="
+            echo "$(git -C $P rev-parse --abbrev-ref HEAD) @ $(git -C $P rev-parse --short HEAD)"
+            echo "== scratch paths =="
+            ls -d ${P}* 2>/dev/null
+            if [[ -d $PB ]]; then
+              echo "== per-branch checkout =="
+              echo "$(git -C $PB rev-parse --abbrev-ref HEAD) @ $(git -C $PB rev-parse --short HEAD)"
+              test -f $PB/.env && echo ".env present"
+              [[ -d $PB/.git && ! -f $PB/.git ]] && echo ".git is a directory (independent store)"
+              echo "per-branch html: $(cat $PB/html/index.html)"
+            fi
+            echo "== containers =="
+            docker ps --format "{{.Names}} | {{.Status}}" | grep -E "issue-99265|web" || echo "none matching"
+            docker inspect issue-99265-web-1 --format "{{range .Mounts}}{{.Source}} -> {{.Destination}}{{println}}{{end}}" 2>/dev/null || true
+            echo "== staging serves (localhost:18265) =="
+            curl -s --max-time 4 http://localhost:18265/
+            echo "== preview URL =="
+            curl -s --max-time 8 https://issue-99265.wilsch-deployment.com/ 2>&1 || echo "no route"
+            exit 0
+          '
