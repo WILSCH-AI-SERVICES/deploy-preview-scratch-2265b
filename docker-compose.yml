@@ -12,3 +12,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+# PROOF ARTIFACT (CCI #1046) — intentionally invalid YAML to force a deploy L2
+# config failure for the create-side reconciliation-net escalation test. DO NOT MERGE.
+__proof_break__: [unterminated
